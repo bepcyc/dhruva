@@ -20,7 +20,7 @@
 import { Settings } from '../src/core/SettingsManager.js';
 import { createFakeSettings } from './lib/fakes.js';
 import { test, assertDeepEqual, assertTrue, assertFalse } from './lib/assert.js';
-import { getHideOffsets, clampSpan, getTriggerRect, rectsIntersect } from '../src/core/autohide/AutoHideGeometry.js';
+import { getHideOffsets, clampSpan, getTriggerRect, rectsIntersect, isPointInRestRect } from '../src/core/autohide/AutoHideGeometry.js';
 
 
 const MONITOR = { x: 0, y: 0, width: 1920, height: 1080 };
@@ -106,4 +106,20 @@ test('rectsIntersect: tolerance extends only toward the screen center', () => {
 test('rectsIntersect: custom tolerance', () => {
     const dock = { x: 600, y: 1000, width: 720, height: 80 };
     assertFalse(rectsIntersect('BOTTOM', dock, { x: 0, y: 0, width: 1920, height: 990 }, 0));
+});
+
+test('isPointInRestRect: hidden dock (translated off screen) still counts the pointer at its shown position', () => {
+    // 1828x80 dock at rest y=1360 on a 1440 px screen, hidden by translation_y=+76
+    const pos = [806, 1436], size = [1828, 80], tr = [0, 76];
+    assertTrue(isPointInRestRect(900, 1400, pos, size, tr));
+    assertTrue(isPointInRestRect(806, 1360, pos, size, tr));
+    assertFalse(isPointInRestRect(900, 1440, pos, size, tr));
+    assertFalse(isPointInRestRect(805, 1400, pos, size, tr));
+    assertFalse(isPointInRestRect(2634, 1400, pos, size, tr));
+    assertFalse(isPointInRestRect(900, 1359, pos, size, tr));
+});
+
+test('isPointInRestRect: no translation is a plain rect test', () => {
+    assertTrue(isPointInRestRect(10, 10, [0, 0], [20, 20], [0, 0]));
+    assertFalse(isPointInRestRect(20, 10, [0, 0], [20, 20], [0, 0]));
 });

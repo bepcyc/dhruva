@@ -22,6 +22,7 @@ import Clutter from 'gi://Clutter';
 import { isActorAlive } from '../Utils.js';
 import { Settings } from '../SettingsManager.js';
 import { getHideOffsets } from './AutoHideGeometry.js';
+import { queueLayoutRegionsUpdate } from '../Compat.js';
 
 
 const DEFAULT_ANIM_DURATION_MS = 250;
@@ -60,6 +61,9 @@ export function animateShow(dockUI, onComplete) {
             dockUI.dockBlur.syncGeometry();
             dockUI.dockBlur.queueCapture(true);
         }
+        // X11: gnome-shell 46 rebuilds the chrome input region only on notify::visible/allocation
+        // (js/ui/layout.js _trackActor), never on translation; rebuild it so the shown dock takes the pointer.
+        queueLayoutRegionsUpdate();
         onComplete();
     });
 }
@@ -74,6 +78,8 @@ export function animateHide(dockUI, onComplete, peek = 0) {
     dockUI.dockBlur.hideBlur();
 
     easeDock(dockUI, { translation_x: hideX, translation_y: hideY, opacity: peek > 0 ? 255 : 0 }, Clutter.AnimationMode.EASE_IN_QUAD, () => {
-        if (dockUI._autohideSerial === serial) onComplete();
+        if (dockUI._autohideSerial !== serial) return;
+        queueLayoutRegionsUpdate(); // drop the hidden dock's rect from the X11 input region
+        onComplete();
     });
 }

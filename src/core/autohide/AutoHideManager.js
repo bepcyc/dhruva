@@ -23,11 +23,11 @@ import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { isActorAlive } from '../Utils.js';
-import { getCursorTracker, setUnredirectEnabled } from '../Compat.js';
+import { getCursorTracker, queueLayoutRegionsUpdate, setUnredirectEnabled } from '../Compat.js';
 import { Settings } from '../SettingsManager.js';
 import { EdgeDetection } from './EdgeDetection.js';
 import { TimeoutTracker } from '../TimeoutTracker.js';
-import { getHideOffsets } from './AutoHideGeometry.js';
+import { getHideOffsets, isPointInRestRect } from './AutoHideGeometry.js';
 import { animateShow, animateHide } from './AutoHideAnimations.js';
 import { WindowOverlapDetection, getVisibleMonitorWindows } from './WindowOverlapDetection.js';
 
@@ -117,7 +117,16 @@ export default class AutoHideManager {
 
     _onPointerLeave() {
         this._isHovered = false;
+        if (this.isHidden) this._cancelShow(); // left the edge before unhide-delay ran out: no reveal
         this.scheduleCheck(DEFAULT_CHECK_DEBOUNCE_MS);
+    }
+
+    _isPointerOverShownDock() {
+        const actor = this.dockUI.actor;
+        if (!actor.is_mapped() || actor.opacity === 0) return false;
+        const [px, py] = global.get_pointer();
+        return isPointInRestRect(px, py, actor.get_transformed_position(), actor.get_transformed_size(),
+            [actor.translation_x, actor.translation_y]);
     }
 
     _bindEvents() {
@@ -482,6 +491,7 @@ export default class AutoHideManager {
         actor.translation_x = hideX;
         actor.translation_y = hideY;
         actor.opacity = 0;
+        queueLayoutRegionsUpdate();
         this._setUnredirectBlocked(false);
     }
 
@@ -544,6 +554,12 @@ export default class AutoHideManager {
 
         if (!this._isDockAlive() || this.isHidden) return;
         if (this._isHovered || this._isPopupOrDragActive()) return;
+        // Never hide under the pointer: crossing events can be lost (X11 input region, animation in flight),
+        // so ask the real pointer position and re-check after hide-delay until it is off the dock.
+        if (this._isPointerOverShownDock()) {
+            this._scheduleHide();
+            return;
+        }
 
         if (this._isOverviewOpen()) {
             this._reveal();
