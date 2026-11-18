@@ -97,3 +97,10 @@ export function rectsIntersect(pos, r1, r2, tolerance = DEFAULT_INTERSECT_TOLERA
         (r2.y + r2.height) <= top
     );
 }
+
+// Rest rect = the transformed rect minus the autohide translation, i.e. where the dock sits when shown.
+export function isPointInRestRect(px, py, pos, size, translation) {
+    const x = pos[0] - translation[0];
+    const y = pos[1] - translation[1];
+    return px >= x && px < x + size[0] && py >= y && py < y + size[1];
+}
